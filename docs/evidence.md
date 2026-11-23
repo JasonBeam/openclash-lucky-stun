@@ -1,6 +1,6 @@
 # 证据附录（已脱敏）
 
-本文件保留 README「已验证的事实」背后的原始命令与输出片段。真实地址、端口、主机名、Token 已替换为示例值。
+本文件保留 [技术说明](reference.md) 中标注【实测】的原始命令与输出片段。真实地址、端口、主机名、域名、Token 已替换为示例值；结构、顺序、数量级保持不变。
 
 ## 1. OpenClash 接管链与绕过规则
 
@@ -10,12 +10,12 @@ nft -a list chain inet fw4 openclash
 ```
 
 ```text
-# 关键片段（顺序号已省略部分无关规则）
+# 关键片段（省略无关规则）
 ... tcp dport { 80, 443 } redirect to :7892 comment "openclash tcp redirect" ...
 ... ip saddr 192.168.10.10 tcp sport 35080-35099 counter packets 657 bytes 34164 return comment "lucky_stun_range" # handle 6178
 ```
 
-- 绕过规则在 redirect 规则**之前**，因此先命中 `return`。
+- 绕过规则在 redirect 规则**之前**，因此先命中 `return`；
 - counter 随时间增长，说明 NAS 该源端口段确实有出站流量经过此链。
 
 ## 2. 外部可达性（check-host）
@@ -28,13 +28,13 @@ GET https://check-host.net/check-tcp?host=<公网IP>:<映射端口>&max_nodes=6
   OK 0.20 s / OK 0.23 s / OK 0.26 s / OK 0.29 s / OK 0.31 s / OK 0.35 s
 ```
 
-同一映射端口用第三方阅读器抓 `/web/index.html`，返回页面标题 `BeamJasonNAS`。
+同一映射端口用第三方阅读器抓 `/web/index.html`，返回页面标题 `MyNAS`。
 
 ## 3. DNAT 路径（conntrack）
 
 ```text
-tcp 6 431999 ESTABLISHED src=34.34.253.19 dst=100.72.239.176 sport=52104 dport=35080
-    src=192.168.10.10 dst=34.34.253.19 sport=35080 dport=52104 [ASSURED]
+tcp 6 431999 ESTABLISHED src=198.51.100.24 dst=203.0.113.10 sport=52104 dport=35080
+    src=192.168.10.10 dst=198.51.100.24 sport=35080 dport=52104 [ASSURED]
 ```
 
 ## 4. 固定端口无入站（对照实验）
@@ -60,15 +60,15 @@ tcpdump -ni <WAN> 'udp and port <port>' → 0 packets
 ```json
 // GET /666/api/stunrulelist → list[0].PublicAddrHistroy（节选）
 [
-  {"AddrRecord": "14.216.5.26:50180",   "UpdateTime": "2026-11-14 04:11:56"},
-  {"AddrRecord": "",                   "UpdateTime": "2026-11-15 04:00:33"},
-  {"AddrRecord": "14.216.5.26:50180",   "UpdateTime": "2026-11-15 04:01:38"},
-  {"AddrRecord": "14.218.35.219:24871", "UpdateTime": "2026-11-20 18:34:49"},
-  {"AddrRecord": "",                   "UpdateTime": "2026-11-20 18:35:01"}
+  {"AddrRecord": "203.0.113.10:50180", "UpdateTime": "<时间1>"},
+  {"AddrRecord": "",                  "UpdateTime": "<时间2>"},
+  {"AddrRecord": "203.0.113.10:50180", "UpdateTime": "<时间3>"},
+  {"AddrRecord": "198.51.100.77:24871", "UpdateTime": "<时间4>"},
+  {"AddrRecord": "",                  "UpdateTime": "<时间5>"}
 ]
 ```
 
-（`AddrRecord` 为空表示该时刻未获取到映射；公网 IP 与端口都发生过变化。）
+（`AddrRecord` 为空表示该时刻未获取到映射；公网 IP 与端口都发生过变化，记录时间仅用于说明变化频率。）
 
 ## 6. 443 端口 UDP 被 reject
 
@@ -94,8 +94,8 @@ counter packets 554 → 557
 ## 7. DIRECT 无法保留客户端目标 IP
 
 ```sh
-curl --resolve tracker.m-team.cc:443:1.1.1.1 -o /dev/null -w '%{http_code} %{time_total}\n' https://tracker.m-team.cc/
-curl --resolve tracker.m-team.cc:443:203.0.113.7 -o /dev/null -w '%{http_code} %{time_total}\n' https://tracker.m-team.cc/
+curl --resolve tracker.example.com:443:1.1.1.1 -o /dev/null -w '%{http_code} %{time_total}\n' https://tracker.example.com/
+curl --resolve tracker.example.com:443:203.0.113.7 -o /dev/null -w '%{http_code} %{time_total}\n' https://tracker.example.com/
 ```
 
 ```text
@@ -110,11 +110,15 @@ curl --resolve tracker.m-team.cc:443:203.0.113.7 -o /dev/null -w '%{http_code} %
 
 ```text
 # NAS 上
-getent hosts www.google.com        → 198.18.x.x        （fake-ip）
-getent hosts api.github.com        → <真实 IP>          （在 fake-ip-filter 中排除）
+getent hosts www.example.com      → 198.18.x.x        （fake-ip）
+getent hosts api.github.com       → <真实 IP>          （在 fake-ip-filter 中排除）
 
 # 开启 OpenClash 时的 curl 计时
 time_connect: 0.000612 s   ← 本机内核立即完成，无参考价值
 time_appconnect: 0.282967 s
 time_starttransfer: 0.284452 s   ← 真实指标
 ```
+
+---
+
+相关文档：[技术说明与常见问题](reference.md) · [手动配置教程](manual-setup.md)
