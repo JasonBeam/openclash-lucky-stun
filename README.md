@@ -25,7 +25,7 @@ Lucky 面板显示“已获取公网地址和端口”  →  但从外网怎么�
 换端口、加 DMZ、放行防火墙都没用
 ```
 
-本项目给出的方案是：**让 Lucky 指定源端口的 TCP 流量在防火墙层绕过 OpenClash 的接管链**，再让 UPnP 把公网映射落到 Lucky 的监听端口上。
+本项目给出的方案是：**让 Lucky 指定源端口的 TCP 流量在防火墙层绕过 OpenClash 的接管链**，再由路由器 UPnP/NAT-PMP 或手动转发将 WAN 入站映射到 Lucky 的监听端口；运营商公网映射是另一层。
 
 ---
 
@@ -58,13 +58,13 @@ NAS（Lucky，host 网络，监听 35080）
 
 ## 3. 核心原理：DIRECT 不等于绕过防火墙
 
-很多人第一反应是“在 Clash 里把这个域名设成 DIRECT 就行了”。实测下来**这样不行**，原因有三层：
+很多人第一反应是“在 Clash 里把这个域名设成 DIRECT 就行了”。在本案例中，仅设置 DIRECT 未能解决问题。可能涉及以下机制，不能将个别现象直接推广到所有配置：
 
 1. **接管发生在策略之前。** 流量先被防火墙规则重定向进 Clash 内核，DIRECT 只是“进了内核之后选择直连”，不代表这条连接没被接管。
 2. **内核会用自己的 socket 重新拨号。** 源端口、目标地址都可能变化，STUN 依赖的 NAT 会话（五元组）就和探测时对不上了。
-3. **SNI 嗅探会改写目标。** 本环境开启了 override-destination / force-dns-mapping，内核按域名重新解析后拨号，客户端指定的 IP 会被丢弃。
+3. **嗅探可能影响目标选择。** 开启相关配置时，内核可能根据域名重新解析；具体拨号目标需要连接记录或抓包验证。
 
-因此有效做法是：**在 OpenClash 的 nftables 接管链中，对「NAS 源 IP + TCP 源端口」提前 return**，让这部分流量根本不进入内核。
+本案例采用的做法是：**在 OpenClash 的 nftables 接管链中，对「NAS 源 IP + TCP 源端口」提前 return**，让这部分流量根本不进入内核。
 
 > 机制分析详见 [技术说明](docs/reference.md)。如果你只想知道怎么做，直接看 [手动配置教程](docs/manual-setup.md)。
 
@@ -77,7 +77,7 @@ NAS（Lucky，host 网络，监听 35080）
 | 路由器系统 | OpenWrt / iStoreOS，**Firewall4 + nftables** | 路由器上执行 `nft -v`，能列出 `inet fw4` 表 |
 | OpenClash | **Fake-IP 模式、REDIRECT 接管、非 TUN** | 路由器上执行 `nft -a list chain inet fw4 openclash`，能看到 redirect 到内核端口 |
 | 自定义脚本 | 能写入 OpenClash 的防火墙自定义脚本 | 路由器上确认 `/etc/openclash/custom/openclash_custom_firewall_rules.sh` 存在 |
-| Lucky | 支持 STUN 的 IPv4-TCP 规则；Docker 场景需 **host 网络** | NAS 上 `docker ps` 看 Lucky 是否使用 host 网络 |
+| Lucky | 支持 STUN 的 IPv4-TCP 规则；Docker 场景需 **host 网络** | NAS 上 检查 Lucky 容器的网络模式，例如 `docker inspect <容器名>` |
 | 后端服务 | 在 NAS 本机可访问 | NAS 上 `curl -I http://127.0.0.1:8096/` |
 | 网络条件 | 满足 Lucky 所要求的 **NAT1** 条件，并具备端口转发能力（UPnP 或手动转发） | 以 Lucky 实际探测结果为准 |
 
@@ -118,7 +118,7 @@ if ! nft list chain inet fw4 openclash 2>/dev/null | grep -q 'lucky_stun_35080';
 fi
 ```
 
-> `sport` 是 **NAS 出站时使用的本地端口**（即 Lucky 监听端口），不是公网映射端口，也不是 STUN 服务器的端口。写成 `dport` 一定无效。
+> `sport` 是 **NAS 出站时使用的本地端口**（即 Lucky 监听端口），不是公网映射端口，也不是 STUN 服务器的端口。`dport` 匹配目标端口，不能替代这里的源端口匹配。
 
 ---
 
@@ -146,8 +146,8 @@ fi
 | --- | --- | --- | --- | --- | --- |
 | 1 | 后端活着 | NAS | `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8096/` | Emby 正常响应 | 外部可达 |
 | 2 | Lucky 拿到映射 | NAS（面板） | 查看规则的“当前公网地址”与“映射端口” | 出站打洞成功 | 入站放行 |
-| 3 | 入站映射存在 | 路由器 | `nft list chain inet fw4 upnp_forward`（输出中找 35080） | 有指向 NAS 的转发 | 运营商放行 |
-| 4 | 绕过规则位置正确 | 路由器 | `nft -a list chain inet fw4 openclash`（输出中找 lucky_stun） | return 序号在 REDIRECT 之前 | 流量真的命中 |
+| 3 | 入站映射存在 | 路由器 | `nft list chain inet fw4 upnp_forward`（输出中找 35080） | 若该链及映射适用，可辅助判断转发；还需核对 DNAT | 运营商放行 |
+| 4 | 绕过规则位置正确 | 路由器 | `nft -a list chain inet fw4 openclash`（输出中找 lucky_stun） | return 在完整链输出中位于 REDIRECT 之前 | 流量真的命中 |
 | 5 | 规则被命中 | 路由器 | 重新触发 Lucky 后看 counter 是否增长 | 有流量走了绕过分支 | 外网成功 |
 | 6 | 外部可达 | 手机蜂窝网络 / 第三方检测 | `curl -4 -m 10 -v 'http://<公网IP>:<映射端口>/'` | 运营商放行、链路通 | 业务功能与长期稳定 |
 | 7 | 到达正确后端 | 外部 + NAS | 页面内容/标题是目标服务；服务端日志或 `conntrack` 有连接 | 映射与后端地址正确 | 登录、播放、并发都正常 |
@@ -165,25 +165,27 @@ fi
 ## 8. 常见问题
 
 **Q：在 Clash 里给这个域名/端口设了 DIRECT，为什么还是不行？**
-因为接管发生在策略之前，内核还会用自己的 socket 重新拨号。需要在防火墙链里提前 return。
+因为接管发生在策略之前，内核还会用自己的 socket 重新拨号。可以先按实际接管链排查，确认问题后再考虑在防火墙链里精确绕过。
 
 **Q：Lucky 显示“已获取公网地址”，是不是就通了？**
 不是。那只说明出站打洞成功；入站还需要 UPnP / 端口转发，并且运营商要放行该映射端口。
 
 **Q：为什么 443 端口做 STUN 容易失败？**
-OpenClash 开启 `disable_udp_quic` 时会在 nftables 里 reject UDP 443；同时 Clash 规则里常见的 `DST-PORT,443` 会把流量送进代理组。STUN 探测包可能到不了目标。本方案只讨论 TCP 穿透，避开这个问题。
+若具体防火墙规则拦截了探测所用的 UDP 443，相关 UDP 探测可能失败；它不直接证明 TCP 穿透失败。`DST-PORT,443` 的实际影响还取决于协议、接管方式及规则顺序，应分别检查。
 
 **Q：能不能用 DMZ 一劳永逸？**
 不建议。DMZ 只是把 WAN 入站全部 DNAT 给 NAS，解决不了“运营商不放行固定端口”的问题，还会把整台 NAS 暴露到公网。
 
 **Q：公网端口老是变怎么办？**
-这是 STUN 方案的固有特性，普通 DNS A 记录也不携带端口。可以缩短 Lucky 的重测周期，或改用支持端口的入口方案（如隧道服务）。详见 [技术说明](docs/reference.md)。
+这是 STUN 方案的固有特性，普通 DNS A 记录也不携带端口。检查 Lucky 映射变化并按需更新入口，或考虑隧道服务；缩短检测间隔不保证映射更稳定。详见 [技术说明](docs/reference.md)。
 
 更多问题见 [技术说明与常见问题](docs/reference.md)。
 
 ---
 
 ## 9. 安全须知
+
+不要直接将缺少适当鉴权与保护的 Lucky、NAS 或路由器管理界面公开到互联网。
 
 - **面板与服务分别鉴权**：Lucky 面板、Emby、下载器等都要有独立认证；对外入口建议 HTTPS。
 - **UPnP 是信任边界**：任何获得权限的设备都能请求端口映射，定期核对 `upnp_forward` 的实际内容，只保留必要端口。

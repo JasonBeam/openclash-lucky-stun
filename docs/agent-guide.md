@@ -60,7 +60,7 @@ command -v curl ss docker
 把下面整段发给 Agent。它只做只读采集，最后给出一份判断报告。
 
 ```text
-你是我的网络排障助手。目标：判断我家是否适用「OpenClash + Lucky IPv4-TCP STUN」方案。
+你是我的网络排障助手。所有写操作均须事先得到我明确授权。目标：判断我家是否适用「OpenClash + Lucky IPv4-TCP STUN」方案。
 现在只做只读检查，不要修改任何文件、规则或服务。
 
 环境：
@@ -93,10 +93,11 @@ command -v curl ss docker
 
 ## 第三部分：再配置（授权后最小改动）
 
-确认检测报告为「适用」后，再发这段。Agent 必须先备份、先给出改动内容，得到你确认后才写入。
+确认检测报告为「适用」后，再发这段。Agent 必须先展示改动并获得明确授权，才可备份或执行其他写操作。
 
 ```text
-基于刚才的检测结果，帮我添加 OpenClash 绕过规则。严格按下面约束执行：
+请先只读检查路由器的 Firewall4、OpenClash 实际接管链、自定义脚本及 NAS/Lucky 拓扑；确认 Fake-IP、非 TUN、TCP REDIRECT 与源地址和端口均适用后，拟定 OpenClash 绕过规则。严格按下面约束执行：
+所有写操作（包括备份、脚本修改、规则写入和重启）都须在列出具体操作后获得我明确授权。
 
 参数（如与实际不符请先问我）：
 - NAS 局域网 IP：192.168.10.10
@@ -104,7 +105,7 @@ command -v curl ss docker
 - 规则注释标记：lucky_stun_35080
 
 流程：
-1. 备份 /etc/openclash/custom/openclash_custom_firewall_rules.sh 到带时间戳的 .bak 文件，并告诉我备份路径；
+1. 先列出拟备份路径，得到授权后将脚本备份到带时间戳的 .bak 文件；
 2. 读取现有脚本，找到 exit 0 的位置；
 3. 生成要插入的片段（不要直接写文件），先贴给我看：
    - 检查 inet fw4 openclash 链是否存在；
@@ -112,7 +113,7 @@ command -v curl ss docker
    - nft insert rule inet fw4 openclash ip saddr 192.168.10.10 tcp sport 35080 counter return comment 'lucky_stun_35080'；
    - 片段必须在 exit 0 之前；
 4. 等我明确回复“确认写入”后，再修改文件；
-5. 写入后不要重启设备，先只读检查 nft 链里规则顺序是否正确；
+5. 写入文件本身不会应用规则；说明需要的应用方式及可能中断，另获授权后应用，再只读检查完整链的顺序；
 6. 如果链不存在、脚本里没有 exit 0、或已有同类规则，立刻停止并报告，不要自行猜测。
 
 禁止：清空任何 nft 链、覆盖整个脚本、改动其他服务、修改 OpenClash 主配置、重启路由器。
@@ -123,10 +124,10 @@ command -v curl ss docker
 ## 第四部分：自动验收
 
 ```text
-现在验收刚才的配置，只读为主，按顺序检查并逐项给结论：
+请验收 OpenWrt Firewall4/nftables、OpenClash TCP REDIRECT 与 NAS Lucky IPv4 TCP STUN 的配置。示例 NAS 为 192.168.10.10，监听 TCP 35080、标记 lucky_stun_35080；先确认实际值。只读检查，所有备份、触发重连、重启或其他写操作均需先获明确授权：
 
-1. nft -a list chain inet fw4 openclash | grep -E 'lucky_stun|redirect'
-   → 绕过规则是否在 REDIRECT 之前？贴出 handle 与顺序。
+1. nft -a list chain inet fw4 openclash
+   → 绕过规则是否在 REDIRECT 之前？按完整链输出顺序判断；handle 只是标识，不代表顺序。
 2. nft list chain inet fw4 upnp_forward 2>/dev/null | grep 35080
    nft list chain inet fw4 upnp_prerouting 2>/dev/null | grep 35080
    → 入站映射是否存在且指向 NAS？
@@ -146,7 +147,7 @@ command -v curl ss docker
 ## 第五部分：出问题如何恢复
 
 ```text
-现在回退 OpenClash 绕过规则，按最小影响处理：
+请为 OpenWrt Firewall4/nftables 与 OpenClash 上 Lucky IPv4 TCP STUN 的绕过规则准备回退。示例标记 lucky_stun_35080，先核对实际脚本与完整链；先展示具体变更、备份和恢复办法，得到我明确授权后才执行任何写操作：
 
 1. 先在 nft -a list chain inet fw4 openclash 里找到 comment 为 lucky_stun_35080 的规则，记录当前 handle；
 2. 用该 handle 删除单条规则：nft delete rule inet fw4 openclash handle <handle>；

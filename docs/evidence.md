@@ -1,6 +1,6 @@
 # 证据附录（已脱敏）
 
-本文件保留 [技术说明](reference.md) 中标注【实测】的原始命令与输出片段。真实地址、端口、主机名、域名、Token 已替换为示例值；结构、顺序、数量级保持不变。
+本文件保留 [技术说明](reference.md) 中标注【实测】的脱敏的历史命令和输出摘要。地址、端口等可能替换为示例值；未能确认的原始细节不应视为完整原始日志。
 
 ## 1. OpenClash 接管链与绕过规则
 
@@ -9,14 +9,10 @@
 nft -a list chain inet fw4 openclash
 ```
 
-```text
-# 关键片段（省略无关规则）
-... tcp dport { 80, 443 } redirect to :7892 comment "openclash tcp redirect" ...
-... ip saddr 192.168.10.10 tcp sport 35080-35099 counter packets 657 bytes 34164 return comment "lucky_stun_range" # handle 6178
-```
+原附录展示的两个规则片段顺序与“绕过在 REDIRECT 前”的文字结论冲突，且现有脱敏记录无法可靠还原当时的完整链输出；因此不将该片段作为排序证据，也不重新编造输出。
 
-- 绕过规则在 redirect 规则**之前**，因此先命中 `return`；
-- counter 随时间增长，说明 NAS 该源端口段确实有出站流量经过此链。
+- 历史记录显示曾配置 NAS 指定 TCP 源端口绕过，并观察到 counter 增长；这只能证明有流量命中。
+- 判断当前顺序时，应读取完整链，以实际输出的先后为准；handle 是标识，不是排序编号。
 
 ## 2. 外部可达性（check-host）
 
@@ -70,7 +66,7 @@ tcpdump -ni <WAN> 'udp and port <port>' → 0 packets
 ]
 ```
 
-（`AddrRecord` 为空表示该时刻未获取到映射；公网 IP 与端口都发生过变化，记录时间仅用于说明变化频率。）
+（历史脱敏摘录含空值和不同地址；时间未保留，不能据此判断变化频率。）
 
 ## 6. 443 端口 UDP 被 reject
 
@@ -84,11 +80,11 @@ udp dport 443 ip daddr != @china_ip_route counter packets 554 bytes 44200
     reject with icmp type port-unreachable
 ```
 
-发送 3 个 STUN 请求到 `:443` 后：
+历史记录称发送 3 个 UDP STUN 请求到 `:443` 后：
 
 ```text
 counter packets 554 → 557
-同一时间 openclash 日志、clash /connections：无任何 UDP 443 记录
+同一时间相关日志未显示 UDP 443 记录；这不足以说明所有 TCP STUN 穿透失败
 ```
 
 配置来源：`/etc/config/openclash` 中 `option disable_udp_quic '1'`；Clash yaml 另有 `- DST-PORT,443,Others`。
@@ -103,7 +99,7 @@ curl --resolve tracker.example.com:443:203.0.113.7 -o /dev/null -w '%{http_code}
 ```text
 404 0.72
 404 0.75
-# 两次结果一致：拨号目标不是 --resolve 指定的 IP
+# 两次状态码接近，本结果不足以单独证明实际拨号目标；需结合抓包或连接记录
 ```
 
 对应 sniffer 配置：`override-destination: true`、`parse-pure-ip: true`、`force-dns-mapping: true`。
@@ -118,7 +114,7 @@ getent hosts api.github.com       → <真实 IP>          （在 fake-ip-filter
 # 开启 OpenClash 时的 curl 计时
 time_connect: 0.000612 s   ← 本机内核立即完成，无参考价值
 time_appconnect: 0.282967 s
-time_starttransfer: 0.284452 s   ← 真实指标
+time_starttransfer: 0.284452 s   ← 包含代理与服务端处理，不等于纯 RTT
 ```
 
 ---
