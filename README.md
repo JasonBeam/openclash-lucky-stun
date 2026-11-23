@@ -12,7 +12,7 @@
 | 【未验证】 | 只是可能性或社区说法，本文没有在本环境证实 |
 
 - 首次验证：2026-11-14（链路打通并外部可达）
-- 最近复核：2026-11-23（绕过规则仍在生效，Lucky 侧 STUN 规则已被本人停用）
+- 最近复核：2026-11-23（绕过规则仍在生效并持续计数；Lucky 侧那条 STUN 规则后来被停用，Enable=false）
 
 ---
 
@@ -81,7 +81,7 @@ tcpdump -ni <WAN接口> 'tcp and port <STUN映射端口>' -c 20
 | # | 事实 | 证据 |
 | --- | --- | --- |
 | 1 | 存在 OpenClash 的 nft 接管链，且自定义脚本的规则能插进该链并计数 | `nft -a list chain inet fw4 openclash` 可见 `... tcp sport 35080-35099 counter packets 657 bytes 34164 return comment "codex_lucky_stun_range"` |
-| 2 | 绕过规则确实被命中（有真实流量经过它） | 同上 counter 持续增长（657 → 310 包/16 KB，跨重启重建） |
+| 2 | 绕过规则确实被命中（有真实流量经过它） | 同一注释的规则 counter 持续增长；防火墙重建后重新计数（657 包/34 KB → 重建后 310 包/16 KB） |
 | 3 | 外网 TCP 能到达该服务 | check-host 6 个外部节点对 `<公网IP>:<映射端口>` 全部 TCP 成功，0.20–0.35 s |
 | 4 | 外部拿到的确实是 NAS 上的服务 | 用第三方阅读器抓 `http://<公网IP>:<映射端口>/web/index.html`，页面标题为 `BeamJasonNAS` |
 | 5 | DNAT 路径正确 | conntrack：`34.34.253.19 → 100.72.239.176:35080` DNAT 到 `192.168.10.10:35080`，状态 ESTABLISHED |
