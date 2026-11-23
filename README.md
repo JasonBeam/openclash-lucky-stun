@@ -158,6 +158,8 @@ fi
 - 端口能连上 ≠ 服务可用，可能只是 Lucky 或反代返回了错误页；
 - 单次成功 ≠ 长期可用，公网地址和端口会变（见 [技术说明](docs/reference.md)）。
 
+> 本仓库案例的后续情况：配置完成后，用户在真实使用中确认该入口可以正常访问；这仍只覆盖该环境，不代表其他运营商、其他设备或长期稳定性。
+
 ---
 
 ## 8. 常见问题
@@ -199,6 +201,11 @@ OpenClash 开启 `disable_udp_quic` 时会在 nftables 里 reject UDP 443；同�
 | [AI Agent 辅助教程](docs/agent-guide.md) | 四段 Prompt：检测、配置、验收、回退 |
 | [技术说明与常见问题](docs/reference.md) | DIRECT 与 bypass、Fake-IP/REDIRECT、验证方法与失败条件 |
 | [证据附录](docs/evidence.md) | 脱敏后的原始命令与输出（可选阅读） |
+
+### 参考资料
+
+- [Lucky 官方文档：STUN 内网穿透](https://www.lucky666.cn/docs/modules/stun/)：端口变化、NAT 要求与客户端配置以官方为准。
+- OpenClash 相关反馈：[Issue #4808](https://github.com/vernesong/OpenClash/issues/4808)、[Issue #5003](https://github.com/vernesong/OpenClash/issues/5003)。
 
 ---
 

@@ -30,6 +30,8 @@ GET https://check-host.net/check-tcp?host=<公网IP>:<映射端口>&max_nodes=6
 
 同一映射端口用第三方阅读器抓 `/web/index.html`，返回页面标题 `MyNAS`。
 
+另一轮针对同一业务的检测中，5 个外部检测点收到 HTTP 302；配置完成后用户在真实使用中确认入口可用。302 与单次成功都只说明服务有响应，不等于已验证登录、播放或长期稳定。
+
 ## 3. DNAT 路径（conntrack）
 
 ```text

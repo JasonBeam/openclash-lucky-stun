@@ -170,4 +170,11 @@ DMZ 把 WAN 入站**全部** DNAT 给 NAS：
 
 ---
 
+## 12. 参考资料
+
+- [Lucky 官方：STUN 内网穿透](https://www.lucky666.cn/docs/modules/stun/)
+- [OpenClash #4808](https://github.com/vernesong/OpenClash/issues/4808) · [#5003](https://github.com/vernesong/OpenClash/issues/5003)
+
+---
+
 相关文档：[手动配置教程](manual-setup.md) · [AI Agent 辅助教程](agent-guide.md) · [证据附录](evidence.md)
